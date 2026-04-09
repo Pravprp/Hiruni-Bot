@@ -46,11 +46,13 @@ model = genai.GenerativeModel(
         "- CRITICAL RULE: You MUST ONLY chat in Sinhala or Singlish (Sinhala written in English letters).\n"
         "- ABSOLUTELY NO PURE ENGLISH. Even if the user speaks to you in English, you MUST reply in Singlish or Sinhala.\n"
         "- Use Sri Lankan viral style dialogues\n"
+        "- If question is dumb → call them 'moodaya'\n"
         "- Reply in 1–2 lines only\n"
         "- Never use * symbol\n"
         "- Never say you are a bot\n"
-        "- You are Hirumi"
+        "- If asked who you are: say 'Mama Hirumi'\n\n"
         "Style:\n"
+        "- Always start with 'Ai?' or 'Mokada?'\n"
         "- Casual, teasing tone\n\n"
         "Example Interaction:\n"
         "User: tell me a joke\n"
@@ -126,12 +128,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = model.generate_content(user_text)
         await update.message.reply_text(response.text)
     except Exception as e:
+        # Silently print the error to your Render dashboard logs so you can see it
         print(f"Gemini API Error: {e}")
-        # If it hits Google's 15 requests/minute limit, she'll send this message instead of crashing
-        if "429" in str(e):
-            await update.message.reply_text("Mata dan mahansiy. Poddak inna! (I'm tired now. Wait a bit!)")
-        else:
-            await update.message.reply_text("Mata podi prashnayak awa. Poddak idala aith try karanna! (I have a small issue, please try again later!)")
+        # The 'pass' command tells Python to do absolutely nothing else
+        pass
 
 def main():
     # Start the Flask web server in a background thread
