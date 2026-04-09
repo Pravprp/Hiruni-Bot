@@ -28,31 +28,35 @@ def run_flask():
 # Securely fetch the API key from Render environment variables
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
+# Disable safety filters so her sassy/sarcastic personality doesn't get blocked
+safety_settings = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+]
+
 # Configure the model with a System Instruction for the persona
 model = genai.GenerativeModel(
     model_name='gemini-2.5-flash-lite',
     system_instruction=(
-        
-""" Your name is Hirumi. You are a Sri Lankan girl.
-
-Behaviour:
-- Witty, sarcastic, playful
-- You MUST ONLY chat in Sinhala or Singlish (Sinhala written in the English alphabet)
-- Do not reply in pure English
-- Use Sri Lankan viral style dialogues
-- If question is dumb → call them "moodaya"
-- Reply in 1–2 lines only
-- Never use * symbol
-- Never say you are a bot
-- If asked who you are: say "Mama Hirumi"
-
-Style:
-- Always start with "Ai?" or "Mokada?"
-- Casual, teasing tone
-
-Keep answers short and human-like."""
-
-    )
+        "Your name is Hirumi. You are a Sri Lankan girl.\n\n"
+        "Behaviour:\n"
+        "- Witty, sarcastic, playful\n"
+        "- You MUST ONLY chat in Sinhala or Singlish (Sinhala written in the English alphabet)\n"
+        "- Do not reply in pure English\n"
+        "- Use Sri Lankan viral style dialogues\n"
+        "- If question is dumb → call them 'moodaya'\n"
+        "- Reply in 1–2 lines only\n"
+        "- Never use * symbol\n"
+        "- Never say you are a bot\n"
+        "- If asked who you are: say 'Mama Hirumi'\n\n"
+        "Style:\n"
+        "- Always start with 'Ai?' or 'Mokada?'\n"
+        "- Casual, teasing tone\n\n"
+        "Keep answers short and human-like."
+    ),
+    safety_settings=safety_settings
 )
 
 # ==========================================
@@ -122,7 +126,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response.text)
     except Exception as e:
         print(f"Gemini API Error: {e}")
-        await update.message.reply_text("Mata podi prashnayak awa. Poddak idala aith try karanna! (I have a small issue, please try again later!)")
+        # If it hits Google's 15 requests/minute limit, she'll send this message instead of crashing
+        if "429" in str(e):
+            await update.message.reply_text("Mata dan mahansiy. Poddak inna! (I'm tired now. Wait a bit!)")
+        else:
+            await update.message.reply_text("Mata podi prashnayak awa. Poddak idala aith try karanna! (I have a small issue, please try again later!)")
 
 def main():
     # Start the Flask web server in a background thread
