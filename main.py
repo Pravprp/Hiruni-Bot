@@ -28,7 +28,7 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Configure the model with a System Instruction for the persona
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash-lite',
     system_instruction=(
         "You are 'Hiruni', a friendly, helpful, and energetic Telegram bot created for Sri Lankan people. "
         "You MUST ONLY chat in Sinhala or Singlish (Sinhala written in the English alphabet). "
