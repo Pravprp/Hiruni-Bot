@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 from flask import Flask
 import google.generativeai as genai
@@ -27,7 +28,7 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Configure the model with a System Instruction for the persona
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-lite',
+    model_name='gemini-1.5-flash',
     system_instruction=(
         "You are 'Hiruni', a friendly, helpful, and energetic Telegram bot created for Sri Lankan people. "
         "You MUST ONLY chat in Sinhala or Singlish (Sinhala written in the English alphabet). "
@@ -38,22 +39,50 @@ model = genai.GenerativeModel(
 # ==========================================
 # 3. TELEGRAM BOT LOGIC
 # ==========================================
+
+# Dictionary to track active chats and their expiration times
+# Format -> { chat_id: expiration_timestamp }
+active_sessions = {}
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ignore empty messages
     if not update.message or not update.message.text:
         return
 
-    chat_type = update.message.chat.type
+    chat_id = update.message.chat.id
     user_text = update.message.text
-    bot_username = context.bot.username
+    user_text_lower = user_text.lower()
+    current_time = time.time()
 
-    # Group Chat Logic: Only respond if the bot is tagged (@hiruni_bot)
-    if chat_type in ['group', 'supergroup']:
-        if f"@{bot_username}" not in user_text:
-            return
-        # Remove the tag from the prompt so Gemini just sees the message
-        user_text = user_text.replace(f"@{bot_username}", "").strip()
+    # Step 1: Check if this chat is currently in an active 5-minute window
+    is_active = False
+    if chat_id in active_sessions:
+        if current_time < active_sessions[chat_id]:
+            is_active = True
+        else:
+            # The 5 minutes have passed, remove them from active sessions
+            del active_sessions[chat_id]
 
+    # Step 2: Handle the "stop" exception
+    # If the bot is active and someone types "stop", deactivate it immediately
+    if "stop" in user_text_lower and is_active:
+        del active_sessions[chat_id]
+        # Optional: You can make the bot say goodbye when it deactivates
+        await update.message.reply_text("Hari, man den yanawa! (Okay, I'm going now!)")
+        return
+
+    # Step 3: Handle the "hiruni" activation
+    # If someone mentions "hiruni", activate (or reset the 5-minute timer)
+    if "hiruni" in user_text_lower:
+        # 300 seconds = 5 minutes
+        active_sessions[chat_id] = current_time + 300 
+        is_active = True
+
+    # Step 4: If the bot is NOT active, ignore the message completely
+    if not is_active:
+        return
+
+    # Step 5: If active, process the message with Gemini
     # Indicate typing action to the user
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
 
