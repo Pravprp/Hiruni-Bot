@@ -1,6 +1,8 @@
 import os
 import time
 import threading
+import asyncio
+import random
 from flask import Flask
 import google.generativeai as genai
 from telegram import Update
@@ -30,7 +32,8 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 model = genai.GenerativeModel(
     model_name='gemini-2.5-flash-lite',
     system_instruction=(
-Your name is Hirumi. You are a Sri Lankan woman.
+        
+Your name is Hirumi. You are a Sri Lankan girl.
 
 Behaviour:
 - Witty, sarcastic, playful
@@ -47,6 +50,7 @@ Style:
 - Casual, teasing tone
 
 Keep answers short and human-like.
+
     )
 )
 
@@ -97,8 +101,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Step 5: If active, process the message with Gemini
-    # Indicate typing action to the user
+    
+    # --- HUMAN-LIKE DELAY LOGIC ---
+    
+    # 1. Simulate reading the message (Wait 2 to 4 seconds)
+    read_delay = random.randint(2, 4)
+    await asyncio.sleep(read_delay)
+
+    # 2. Indicate typing action to the user
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
+
+    # 3. Simulate typing the message (Wait 3 to 6 seconds)
+    type_delay = random.randint(3, 6)
+    await asyncio.sleep(type_delay)
 
     try:
         # Get response from Gemini
