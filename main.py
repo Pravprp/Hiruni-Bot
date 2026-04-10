@@ -18,17 +18,14 @@ def home():
     return "Hiruni Bot is Alive and Running!"
 
 def run_flask():
-    # Render assigns a dynamic PORT via environment variables
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 # ==========================================
 # 2. GEMINI AI SETUP
 # ==========================================
-# Securely fetch the API key from Render environment variables
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# Disable safety filters so her sassy/sarcastic personality doesn't get blocked
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -36,11 +33,10 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
 ]
 
-# Configure the model with a System Instruction for the persona
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-lite',
+    model_name='gemini-2.5-flash-lite', # Updated to a stable version string
     system_instruction=(
-        "Your name is Hirumi. You are a Sri Lankan girl.\n\n"
+        "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
         "Behaviour:\n"
         "- sarcastic, playful\n"
         "- CRITICAL RULE: You MUST ONLY chat in Sinhala.\n"
@@ -62,11 +58,9 @@ model = genai.GenerativeModel(
 # ==========================================
 
 # Dictionary to track active chats and their expiration times
-# Format -> { chat_id: expiration_timestamp }
 active_sessions = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Ignore empty messages
     if not update.message or not update.message.text:
         return
 
@@ -74,66 +68,59 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     user_text_lower = user_text.lower()
     current_time = time.time()
+    bot_username = (await context.bot.get_me()).username
 
-    # Step 1: Check if this chat is currently in an active 5-minute window
+    # Check if the message is a reply to the bot
+    is_reply_to_bot = False
+    if update.message.reply_to_message:
+        if update.message.reply_to_message.from_user.username == bot_username:
+            is_reply_to_bot = True
+
+    # Step 1: Check activation status
     is_active = False
     if chat_id in active_sessions:
         if current_time < active_sessions[chat_id]:
             is_active = True
         else:
-            # The 5 minutes have passed, remove them from active sessions
             del active_sessions[chat_id]
 
-    # Step 2: Handle the "stop" exception
-    # If the bot is active and someone types "stop", deactivate it immediately
-    if "stop" in user_text_lower and is_active:
-        del active_sessions[chat_id]
-        # Optional: You can make the bot say goodbye when it deactivates
-        await update.message.reply_text("Hari, man den yanawa! (Okay, I'm going now!)")
+    # Step 2: Handle "stop" (Only if it's a reply to the bot and bot is active)
+    if "stop" in user_text_lower and is_active and is_reply_to_bot:
+        if chat_id in active_sessions:
+            del active_sessions[chat_id]
+        await update.message.reply_text("Hari, man den yanawa! 😴💤💤")
         return
 
-    # Step 3: Handle the "hiruni" activation
-    # If someone mentions "hiruni", activate (or reset the 5-minute timer)
+    # Step 3: Handle "hiruni" activation (Always triggers/resets timer)
     if "hiruni" in user_text_lower:
-        # 300 seconds = 5 minutes
         active_sessions[chat_id] = current_time + 300 
         is_active = True
-
-    # Step 4: If the bot is NOT active, ignore the message completely
-    if not is_active:
+    # If not mentioning 'hiruni' and not replying to bot, ignore completely
+    elif not (is_active and is_reply_to_bot):
         return
 
-    # Step 5: If active, process the message with Gemini
+    # Step 4: Process with Gemini (Already active AND it's a reply or mention)
     
     # --- HUMAN-LIKE DELAY LOGIC ---
-    
-    # 1. Simulate reading the message (Wait 2 to 4 seconds)
     read_delay = random.randint(2, 4)
     await asyncio.sleep(read_delay)
 
-    # 2. Indicate typing action to the user
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
 
-    # 3. Simulate typing the message (Wait 3 to 6 seconds)
     type_delay = random.randint(3, 6)
     await asyncio.sleep(type_delay)
 
     try:
-        # Get response from Gemini
         response = model.generate_content(user_text)
         await update.message.reply_text(response.text)
     except Exception as e:
-        # Silently print the error to your Render dashboard logs so you can see it
         print(f"Gemini API Error: {e}")
-        # The 'pass' command tells Python to do absolutely nothing else
         pass
 
 def main():
-    # Start the Flask web server in a background thread
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    # Build and start the Telegram Bot
     telegram_token = os.environ.get("TELEGRAM_TOKEN")
     if not telegram_token:
         raise ValueError("No TELEGRAM_TOKEN found in environment variables!")
@@ -143,7 +130,6 @@ def main():
     # Listen to all text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Start polling for messages
     print("Hiruni is starting...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
