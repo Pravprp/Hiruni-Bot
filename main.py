@@ -39,7 +39,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-lite', # Make sure this works in your region/account!
+    model_name='gemini-2.5-flash-lite', 
     system_instruction=(
         "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
         "Behaviour:\n"
@@ -82,21 +82,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Step 1: Check activation status
     is_active = False
     if chat_id in active_sessions:
-        if current_time < active_sessions:
+        if current_time < active_sessions[chat_id]:
             is_active = True
         else:
-            del active_sessions
+            del active_sessions[chat_id]
 
     # Step 2: Handle "stop" 
     if "stop" in user_text_lower and is_active and is_reply_to_bot:
         if chat_id in active_sessions:
-            del active_sessions
+            del active_sessions[chat_id]
         await update.message.reply_text("Hari, man den yanawa! 😴💤💤")
         return
 
     # Step 3: Handle "hiruni" activation
     if "hiruni" in user_text_lower:
-        active_sessions = current_time + 300 
+        active_sessions[chat_id] = current_time + 300 
         is_active = True
     elif not (is_active and is_reply_to_bot):
         return
@@ -124,7 +124,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(custom_reply)
         
         # Reset the 5-minute timer since the user interacted
-        active_sessions = time.time() + 300 
+        active_sessions[chat_id] = time.time() + 300 
         return
 
     # Step 5: Process with Gemini (If no custom triggers were hit)
@@ -141,7 +141,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response.text)
         
         # Reset the 5-minute timer on a successful AI chat too
-        active_sessions = time.time() + 300
+        active_sessions[chat_id] = time.time() + 300
     except Exception as e:
         print(f"Gemini API Error: {e}")
         pass
