@@ -8,6 +8,11 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
+# Import the new features
+from joke import get_random_joke
+from poem import get_random_poem
+from quote import get_random_quote
+
 # ==========================================
 # 1. FLASK SERVER (For UptimeRobot Keep-Alive)
 # ==========================================
@@ -34,7 +39,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-lite', # Updated to a stable version string
+    model_name='gemini-2.5-flash-lite', # Make sure this works in your region/account!
     system_instruction=(
         "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
         "Behaviour:\n"
@@ -57,7 +62,6 @@ model = genai.GenerativeModel(
 # 3. TELEGRAM BOT LOGIC
 # ==========================================
 
-# Dictionary to track active chats and their expiration times
 active_sessions = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -70,7 +74,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = time.time()
     bot_username = (await context.bot.get_me()).username
 
-    # Check if the message is a reply to the bot
     is_reply_to_bot = False
     if update.message.reply_to_message:
         if update.message.reply_to_message.from_user.username == bot_username:
@@ -79,29 +82,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Step 1: Check activation status
     is_active = False
     if chat_id in active_sessions:
-        if current_time < active_sessions[chat_id]:
+        if current_time < active_sessions:
             is_active = True
         else:
-            del active_sessions[chat_id]
+            del active_sessions
 
-    # Step 2: Handle "stop" (Only if it's a reply to the bot and bot is active)
+    # Step 2: Handle "stop" 
     if "stop" in user_text_lower and is_active and is_reply_to_bot:
         if chat_id in active_sessions:
-            del active_sessions[chat_id]
+            del active_sessions
         await update.message.reply_text("Hari, man den yanawa! 😴💤💤")
         return
 
-    # Step 3: Handle "hiruni" activation (Always triggers/resets timer)
+    # Step 3: Handle "hiruni" activation
     if "hiruni" in user_text_lower:
-        active_sessions[chat_id] = current_time + 300 
+        active_sessions = current_time + 300 
         is_active = True
-    # If not mentioning 'hiruni' and not replying to bot, ignore completely
     elif not (is_active and is_reply_to_bot):
         return
 
-    # Step 4: Process with Gemini (Already active AND it's a reply or mention)
-    
-    # --- HUMAN-LIKE DELAY LOGIC ---
+    # Step 4: Handle Jokes, Poems, and Quotes (Only if replying & active)
+    custom_reply = None
+    if is_active and is_reply_to_bot:
+        if "joke" in user_text_lower:
+            custom_reply = get_random_joke()
+        elif "poem" in user_text_lower:
+            custom_reply = get_random_poem()
+        elif "quote" in user_text_lower:
+            custom_reply = get_random_quote()
+
+    # If it's a custom command, send the predefined text and skip AI
+    if custom_reply:
+        read_delay = random.randint(1, 2)
+        await asyncio.sleep(read_delay)
+        
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
+        
+        type_delay = random.randint(2, 4)
+        await asyncio.sleep(type_delay)
+        
+        await update.message.reply_text(custom_reply)
+        
+        # Reset the 5-minute timer since the user interacted
+        active_sessions = time.time() + 300 
+        return
+
+    # Step 5: Process with Gemini (If no custom triggers were hit)
     read_delay = random.randint(2, 4)
     await asyncio.sleep(read_delay)
 
@@ -113,6 +139,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = model.generate_content(user_text)
         await update.message.reply_text(response.text)
+        
+        # Reset the 5-minute timer on a successful AI chat too
+        active_sessions = time.time() + 300
     except Exception as e:
         print(f"Gemini API Error: {e}")
         pass
@@ -127,7 +156,6 @@ def main():
 
     application = Application.builder().token(telegram_token).build()
     
-    # Listen to all text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("Hiruni is starting...")
