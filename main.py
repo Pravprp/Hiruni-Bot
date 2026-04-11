@@ -79,6 +79,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.message.reply_to_message.from_user.username == bot_username:
             is_reply_to_bot = True
 
+    # Identify if the message contains one of the special trigger words
+    is_trigger_word = "joke" in user_text_lower or "poem" in user_text_lower or "quote" in user_text_lower
+
     # Step 1: Check activation status
     is_active = False
     if chat_id in active_sessions:
@@ -94,16 +97,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Hari, man den yanawa! 😴💤💤")
         return
 
-    # Step 3: Handle "hiruni" activation
+    # Step 3: Handle "hiruni" activation and message filtering
     if "hiruni" in user_text_lower:
         active_sessions[chat_id] = current_time + 300 
         is_active = True
-    elif not (is_active and is_reply_to_bot):
+    elif not is_active:
+        # If the bot isn't active, ignore everything
+        return
+    elif not is_reply_to_bot and not is_trigger_word:
+        # If active, ignore messages UNLESS it's a reply to the bot OR contains a trigger word
         return
 
-    # Step 4: Handle Jokes, Poems, and Quotes (Only if replying & active)
+    # Step 4: Handle Jokes, Poems, and Quotes 
+    # (Notice we removed 'is_reply_to_bot' from this check so it triggers on any message if active)
     custom_reply = None
-    if is_active and is_reply_to_bot:
+    if is_active:
         if "joke" in user_text_lower:
             custom_reply = get_random_joke()
         elif "poem" in user_text_lower:
