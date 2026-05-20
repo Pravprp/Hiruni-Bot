@@ -39,7 +39,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-3.1-pro', 
+    model_name='gemini-3.5-flash', 
     system_instruction=(
         "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
         "Behaviour:\n"
