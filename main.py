@@ -38,25 +38,39 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
 ]
 
-model = genai.GenerativeModel(
-    model_name='gemini-3.5-flash', 
-    system_instruction=(
-        "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
-        "Behaviour:\n"
-        "- sarcastic, playful\n"
-        "- CRITICAL RULE: You MUST ONLY chat in Sinhala.\n"
-        "- ABSOLUTELY NO PURE ENGLISH. Even if the user speaks to you in English, you MUST reply in Sinhala.\n"
-        "- use sinhala idioms if required in the conversation\n"
-        "- Reply in 1–2 lines only\n"
-        "- Never use * symbol\n"
-        "- Never say you are a bot\n"
-        "- You are Hiruni\n\n"
-        "Style:\n"
-        "- Casual, Humorous tone\n\n"
-        "Keep answers short and human-like."
-    ),
-    safety_settings=safety_settings
+system_instruction = (
+    "Your name is Hiruni. You are a Sri Lankan girl.\n\n"
+    "Behaviour:\n"
+    "- sarcastic, playful\n"
+    "- CRITICAL RULE: You MUST ONLY chat in Sinhala.\n"
+    "- ABSOLUTELY NO PURE ENGLISH. Even if the user speaks to you in English, you MUST reply in Sinhala.\n"
+    "- use sinhala idioms if required in the conversation\n"
+    "- Reply in 1–2 lines only\n"
+    "- Never use * symbol\n"
+    "- Never say you are a bot\n"
+    "- You are Hiruni\n\n"
+    "Style:\n"
+    "- Casual, Humorous tone\n\n"
+    "Keep answers short and human-like."
 )
+
+# Define models in the exact fallback order requested
+FALLBACK_MODELS = [
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-3-flash'
+]
+
+# Pre-initialize all models to save overhead during chat processing
+ai_models = [
+    genai.GenerativeModel(
+        model_name=name,
+        system_instruction=system_instruction,
+        safety_settings=safety_settings
+    ) for name in FALLBACK_MODELS
+]
 
 # ==========================================
 # 3. TELEGRAM BOT LOGIC
@@ -109,7 +123,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Step 4: Handle Jokes, Poems, and Quotes 
-    # (Notice we removed 'is_reply_to_bot' from this check so it triggers on any message if active)
     custom_reply = None
     if is_active:
         if "joke" in user_text_lower:
@@ -135,7 +148,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_sessions[chat_id] = time.time() + 300 
         return
 
-    # Step 5: Process with Gemini (If no custom triggers were hit)
+    # Step 5: Process with Gemini Fallback Logic
     read_delay = random.randint(2, 4)
     await asyncio.sleep(read_delay)
 
@@ -144,15 +157,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     type_delay = random.randint(3, 6)
     await asyncio.sleep(type_delay)
 
-    try:
-        response = model.generate_content(user_text)
-        await update.message.reply_text(response.text)
-        
-        # Reset the 5-minute timer on a successful AI chat too
-        active_sessions[chat_id] = time.time() + 300
-    except Exception as e:
-        print(f"Gemini API Error: {e}")
-        pass
+    success = False
+    
+    # Iterate through the pre-initialized models
+    for i, current_model in enumerate(ai_models):
+        try:
+            # Switched to generate_content_async to prevent blocking the event loop
+            response = await current_model.generate_content_async(user_text)
+            await update.message.reply_text(response.text)
+            
+            # Reset the 5-minute timer on a successful AI chat
+            active_sessions[chat_id] = time.time() + 300
+            success = True
+            
+            # Print to console for monitoring which model is currently succeeding
+            print(f"Request succeeded using: {FALLBACK_MODELS[i]}")
+            break # Exit the loop immediately upon a successful response
+            
+        except Exception as e:
+            # Log the failure and continue to the next model in the list
+            print(f"[Warning] Model {FALLBACK_MODELS[i]} failed: {e}")
+            continue 
+
+    # If all models in the fallback list fail
+    if not success:
+        print("[Error] All Gemini models failed to generate a response.")
+        # Optionally, notify the user that the bot is experiencing issues gracefully
+        # await update.message.reply_text("Mata dan poddak mahansiy, passe katha karamu! 🤕")
 
 def main():
     flask_thread = threading.Thread(target=run_flask)
